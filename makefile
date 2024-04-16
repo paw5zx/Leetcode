@@ -1,11 +1,12 @@
-#V1.4.0
-#1.修改include、lib路径，为多三方库做统一优化
-#2.添加了静态库的链接规则
+# V1.4.1
+# 1.添加了pkg-config的使用，可以自动获取三方库（以aravis为例）的头文件和库文件路径
+# 2.添加对c++23的支持
 
 
-##变量定义
+#变量定义
 CC := g++    #编译器
 CXXFLAGS := -g -w #编译选项
+PKGFLAGS := $(shell pkg-config --cflags aravis-0.8)
 
 SRC_DIR := ./src
 OBJ_DIR := ./obj
@@ -18,23 +19,18 @@ INCL_DIR += $(filter-out $(wildcard ./include/*.h),$(wildcard ./include/*))
 LIB_DIR := ./lib
 LIB_DIR += $(wildcard ./lib/*)
 
-
-
-
-TEST_DIR := $(filter-out $(wildcard $(SRC_DIR)/*.cpp), $(wildcard $(SRC_DIR)/*))
-##命名
-#所有cpp文件
+##所有cpp文件
 cpp_src := $(shell find $(SRC_DIR) -name *.cpp)
-#带有main函数的源文件
+##带有main函数的源文件
 cpp_main := $(shell grep -l "int main" $(cpp_src))   
-#类的实现文件 
+##类的实现文件 
 cpp_class := $(filter-out $(cpp_main), $(cpp_src))    
-#目标文件
+##目标文件
 cpp_obj_main := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(cpp_main))
 cpp_obj_class := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(cpp_class))
-#可执行文件
+##可执行文件
 cpp_out_main := $(patsubst $(SRC_DIR)/%.cpp,$(BIN_DIR)/%.out,$(cpp_main))
-#汇编文件
+##汇编文件
 cpp_asm := $(patsubst $(SRC_DIR)/%.cpp,$(ASM_DIR)/%.s,$(cpp_src))
 
 ##头文件路径标志,为每个加上-I
@@ -42,10 +38,10 @@ i_flag :=$(foreach item,$(INCL_DIR),-I$(item))
 ##库文件路径标志，为每个加上-L
 l_flag :=$(foreach item,$(LIB_DIR),-L$(item))
 
-#链接的库
-LIBS := -llog4cpp -lpthread
+##链接的库
+LIBS := $(shell pkg-config --libs aravis-0.8) -llog4cpp -lpthread
 
-###操作
+#操作
 ##汇编
 $(cpp_asm) : $(ASM_DIR)/%.s : $(SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
@@ -64,8 +60,8 @@ $(cpp_obj_main) : $(OBJ_DIR)/%.o : $(SRC_DIR)/%.cpp
 	$(call parse_cpp_standard,$<)
 	@$(CC) $(CXXFLAGS) $(i_flag) -c $^ -o $@
 
-#主函数文件应与自身及所有类实现函数链接 g++ filename1.o filename2.o ... -o outname
-# 对于outname，$(cpp_out_main)要和 $(BIN_DIR)/%.out双重锁定，double check
+##链接
+# 主函数文件应与自身及所有类实现函数链接 g++ filename1.o filename2.o ... -o outname
 # $@是21
 # $^是obj/21.o
 $(cpp_out_main) : $(BIN_DIR)/%.out : $(OBJ_DIR)/%.o $(cpp_obj_class)
@@ -87,8 +83,8 @@ clean :
 .PHONY : clean debug all asm
 
 
-#解析文件内容并设置C++标准
-#从文本中找出以"C++ Standard: "开头的字符串，并输出该字符串后的一个或多个非空白字符
+# 解析文件内容并设置C++标准
+# 从文本中找出以"C++ Standard: "开头的字符串，并输出该字符串后的一个或多个非空白字符
 define parse_cpp_standard
 	$(eval FILE_CONTENT := $(shell cat $(1)))
 	$(eval CPP_STANDARD := $(shell echo "$(FILE_CONTENT)" | grep -oP "(?<=C\+\+ Standard: )[^\s]+"))
@@ -97,6 +93,7 @@ define parse_cpp_standard
 	$(if $(filter $(CPP_STANDARD),C++14),$(eval CXXFLAGS += -std=c++14))
 	$(if $(filter $(CPP_STANDARD),C++17),$(eval CXXFLAGS += -std=c++17))
 	$(if $(filter $(CPP_STANDARD),C++20),$(eval CXXFLAGS += -std=c++20))
+	$(if $(filter $(CPP_STANDARD),C++23),$(eval CXXFLAGS += -std=c++23))
 endef
 
 
